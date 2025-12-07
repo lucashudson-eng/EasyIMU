@@ -28,6 +28,35 @@
 #define MPU9250_REG_ACCEL_XOUT_H   0x3B
 #define MPU9250_REG_GYRO_XOUT_H    0x43
 
+// I2C Master registers (for magnetometer access)
+#define MPU9250_REG_I2C_SLV0_ADDR  0x25
+#define MPU9250_REG_I2C_SLV0_REG   0x26
+#define MPU9250_REG_I2C_SLV0_CTRL  0x27
+#define MPU9250_REG_I2C_SLV0_DO    0x63
+#define MPU9250_REG_I2C_MST_CTRL   0x24
+#define MPU9250_REG_EXT_SLV_SENS_DATA_00 0x49
+
+// Magnetometer (AK8963) registers
+#define MPU9250_AK8963_I2C_ADDR    0x0C
+#define MPU9250_AK8963_REG_WIA     0x00
+#define MPU9250_AK8963_REG_CNTL1   0x0A
+#define MPU9250_AK8963_REG_CNTL2   0x0B
+#define MPU9250_AK8963_REG_ASAX    0x10
+#define MPU9250_AK8963_REG_ASAY    0x11
+#define MPU9250_AK8963_REG_ASAZ    0x12
+#define MPU9250_AK8963_REG_HXL     0x03
+#define MPU9250_AK8963_WHO_AM_I    0x48
+
+// Magnetometer operation modes
+#define MPU9250_AK8963_MODE_POWER_DOWN    0x00
+#define MPU9250_AK8963_MODE_SINGLE_MEAS   0x01
+#define MPU9250_AK8963_MODE_CONT_MEAS_1   0x02
+#define MPU9250_AK8963_MODE_CONT_MEAS_2   0x06
+#define MPU9250_AK8963_MODE_EXT_TRIG      0x04
+#define MPU9250_AK8963_MODE_SELF_TEST     0x08
+#define MPU9250_AK8963_MODE_FUSE_ROM      0x0F
+#define MPU9250_AK8963_BIT_16BIT          0x10
+
 // Accelerometer scales
 #define MPU9250_ACCEL_FS_2G  0x00
 #define MPU9250_ACCEL_FS_4G  0x08
@@ -67,6 +96,10 @@ struct GyroData {
     float x, y, z;
 };
 
+struct MagData {
+    float x, y, z;
+};
+
 class MPU9250 {
 public:
     // Constructor: I2C using default pins (SDA/SCL default)
@@ -101,6 +134,14 @@ public:
     GyroData readGyro();
     void readGyro(float &x, float &y, float &z);
 
+    // Magnetometer functions
+    bool initMagnetometer();
+    MagData readMag();
+    void readMag(float &x, float &y, float &z);
+
+    // Read all sensor data (accelerometer, gyroscope, magnetometer)
+    void readAll(AccelData &accel, GyroData &gyro, MagData &mag);
+
 private:
     // Communication type flags
     bool _useI2C = false;
@@ -121,6 +162,11 @@ private:
     uint8_t _chipId = 0;
     float _accelScale = 16384.0f;  // LSB/g for ±2g range
     float _gyroScale = 131.0f;     // LSB/°/s for ±250°/s range
+    
+    // Magnetometer calibration factors
+    float _magCorrFactorX = 1.0f;
+    float _magCorrFactorY = 1.0f;
+    float _magCorrFactorZ = 1.0f;
 
     // Internal helpers
     uint8_t spiTransfer(uint8_t value);
@@ -132,4 +178,11 @@ private:
     void write8(uint8_t reg, uint8_t value);
     int16_t read16(uint8_t reg);
     void readRegisters(uint8_t reg, uint8_t *buffer, uint8_t length);
+    
+    // Magnetometer helpers (I2C master mode)
+    void enableI2CMaster();
+    uint8_t readAK8963Register(uint8_t reg);
+    void writeAK8963Register(uint8_t reg, uint8_t value);
+    void readAK8963Data(uint8_t *buffer);
+    void getMagnetometerCalibration();
 };

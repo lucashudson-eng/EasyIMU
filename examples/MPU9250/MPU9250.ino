@@ -2,13 +2,13 @@
 
 // If using SPI
 
-#define MPU_SCK  (14)
-#define MPU_MISO (12)
-#define MPU_MOSI (13)
-#define MPU_CS   (15)
+// #define MPU_SCK  (18)
+// #define MPU_MISO (19)
+// #define MPU_MOSI (23)
+#define MPU_CS   (5)
 
-// MPU9250 mpu(MPU_CS); // Default constructor uses SPI with hardware default pins
-MPU9250 mpu(MPU_SCK, MPU_MISO, MPU_MOSI, MPU_CS); // Custom SPI pins
+MPU9250 mpu(MPU_CS); // Default constructor uses SPI with hardware default pins
+// MPU9250 mpu(MPU_SCK, MPU_MISO, MPU_MOSI, MPU_CS); // Custom SPI pins
 
 // If using I2C
 
@@ -55,17 +55,30 @@ void setup() {
   mpu.setSampleRateDivider(4);
   Serial.println("  Sample rate: 200Hz");
   
+  // Initialize magnetometer
+  Serial.println("Initializing magnetometer...");
+  if (!mpu.initMagnetometer()) {
+    Serial.println("  Warning: Magnetometer initialization failed.");
+  } else {
+    Serial.println("  Magnetometer initialized successfully!");
+  }
+  
   Serial.println();
-  Serial.println("Reading accelerometer and gyroscope data...");
+  Serial.println("Reading accelerometer, gyroscope, and magnetometer data...");
   Serial.println();
 }
 
 void loop() {
-  // Read accelerometer data
+  Serial.println("=== Method 1: Individual readings ===");
+  
+  // Read accelerometer data individually
   AccelData accel = mpu.readAccel();
   
-  // Read gyroscope data
+  // Read gyroscope data individually
   GyroData gyro = mpu.readGyro();
+  
+  // Read magnetometer data individually
+  MagData mag = mpu.readMag();
 
   // Print accelerometer data (in g)
   Serial.print("Accel (g): ");
@@ -83,7 +96,57 @@ void loop() {
   Serial.print("  Y=");
   Serial.print(gyro.y, 2);
   Serial.print("  Z=");
-  Serial.println(gyro.z, 2);
+  Serial.print(gyro.z, 2);
 
+  // Print magnetometer data (in µT)
+  Serial.print("  |  Mag (µT): ");
+  Serial.print("X=");
+  Serial.print(mag.x, 2);
+  Serial.print("  Y=");
+  Serial.print(mag.y, 2);
+  Serial.print("  Z=");
+  Serial.println(mag.z, 2);
+
+  delay(500);
+  
+  Serial.println();
+  Serial.println("=== Method 2: Read all at once ===");
+  
+  // Declare data structures
+  AccelData accelAll;
+  GyroData gyroAll;
+  MagData magAll;
+  
+  // Read all sensor data at once
+  mpu.readAll(accelAll, gyroAll, magAll);
+
+  // Print accelerometer data (in g)
+  Serial.print("Accel (g): ");
+  Serial.print("X=");
+  Serial.print(accelAll.x, 3);
+  Serial.print("  Y=");
+  Serial.print(accelAll.y, 3);
+  Serial.print("  Z=");
+  Serial.print(accelAll.z, 3);
+
+  // Print gyroscope data (in deg/s)
+  Serial.print("  |  Gyro (deg/s): ");
+  Serial.print("X=");
+  Serial.print(gyroAll.x, 2);
+  Serial.print("  Y=");
+  Serial.print(gyroAll.y, 2);
+  Serial.print("  Z=");
+  Serial.print(gyroAll.z, 2);
+
+  // Print magnetometer data (in µT)
+  Serial.print("  |  Mag (µT): ");
+  Serial.print("X=");
+  Serial.print(magAll.x, 2);
+  Serial.print("  Y=");
+  Serial.print(magAll.y, 2);
+  Serial.print("  Z=");
+  Serial.println(magAll.z, 2);
+
+  Serial.println();
   delay(500);  // 2Hz output rate
 }

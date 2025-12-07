@@ -1,12 +1,22 @@
 #include <BMP280.h>
 
-#define BMP_SCK  (14)
-#define BMP_MISO (12)
-#define BMP_MOSI (13)
-#define BMP_CS   (15)
+// If using SPI
 
-// BMP280 bmp(BMP_CS);
-BMP280 bmp(BMP_SCK, BMP_MISO, BMP_MOSI, BMP_CS);
+// #define BMP_SCK  (18)
+// #define BMP_MISO (19)
+// #define BMP_MOSI (23)
+#define BMP_CS   (5)
+
+BMP280 bmp(BMP_CS);
+// BMP280 bmp(BMP_SCK, BMP_MISO, BMP_MOSI, BMP_CS);
+
+// If using I2C
+
+// #define BMP_SDA  (21)
+// #define BMP_SCL  (22)
+
+// BMP280 bmp; // Default constructor uses I2C with default pins
+// BMP280 bmp(BMP_SDA, BMP_SCL); // Custom I2C pins
 
 void setup() {
   Serial.begin(115200);

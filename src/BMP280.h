@@ -2,10 +2,15 @@
 
 #include <Arduino.h>
 #include <SPI.h>
+#include <Wire.h>
 
 // IDs and basic registers
 #define BMP280_CHIP_ID        0x58
 #define BMP280_REG_CHIP_ID     0xD0
+
+// I2C addresses
+#define BMP280_I2C_ADDR       0x76
+#define BMP280_I2C_ADDR_ALT   0x77
 
 // Calibration data registers
 #define BMP280_REG_DIG_T1      0x88
@@ -76,6 +81,25 @@
 class BMP280 {
 public:
     /*!
+     *  @brief  Constructor for I2C using default pins
+     *  
+     *  Initializes the BMP280 with I2C interface using default
+     *  hardware I2C pins (SDA, SCL).
+     */
+    BMP280();
+
+    /*!
+     *  @brief  Constructor for I2C with custom pins
+     *  
+     *  Initializes the BMP280 with I2C interface using custom
+     *  pin assignments for SDA and SCL.
+     *  
+     *  @param  sdaPin  Serial data pin number
+     *  @param  sclPin  Serial clock pin number
+     */
+    BMP280(uint8_t sdaPin, uint8_t sclPin);
+
+    /*!
      *  @brief  Constructor for hardware SPI
      *  
      *  Initializes the BMP280 with hardware SPI interface using default
@@ -101,13 +125,14 @@ public:
     /*!
      *  @brief  Initialize the BMP280 sensor
      *  
-     *  Sets up SPI communication, verifies chip ID, reads calibration
+     *  Sets up I2C or SPI communication, verifies chip ID, reads calibration
      *  data, and configures the sensor for normal operation mode.
      *  
-     *  @param  chipId  Expected chip ID (default: 0x58 for BMP280)
+     *  @param  i2cAddr  I2C address (default: 0x76 for BMP280, only used for I2C)
+     *  @param  chipId   Expected chip ID (default: 0x58 for BMP280)
      *  @return true if initialization successful, false if chip ID mismatch
      */
-    bool begin(uint8_t chipId = BMP280_CHIP_ID);
+    bool begin(uint8_t i2cAddr = BMP280_I2C_ADDR, uint8_t chipId = BMP280_CHIP_ID);
 
     /*!
      *  @brief  Read temperature from sensor
@@ -166,6 +191,19 @@ public:
     float waterBoilingPoint(float pressure);
 
     /*!
+     *  @brief  Read all sensor data (temperature, pressure, altitude)
+     *  
+     *  Reads temperature, pressure, and calculates altitude from the sensor.
+     *  All values are stored in the provided structure.
+     *  
+     *  @param  data  Structure to store temperature, pressure, and altitude
+     *  @param  seaLevelPressure  Sea level reference pressure in Pascals
+     *                            (default: 101325 Pa = standard atmosphere)
+     */
+    void readAll(float &temperature, float &pressure, float &altitude, 
+                 float seaLevelPressure = 101325.0);
+
+    /*!
      *  @brief  Configure sensor operating parameters
      *  
      *  Sets the power mode, oversampling rates for temperature and pressure,
@@ -215,8 +253,16 @@ public:
     void reset();
 
 private:
-    // Pin configuration
+    // Communication type flags
+    bool _useI2C = false;
     bool _useHardwareSPI = true;
+
+    // I2C configuration
+    uint8_t _i2cAddress = BMP280_I2C_ADDR;
+    uint8_t _pinSDA = 0xFF;
+    uint8_t _pinSCL = 0xFF;
+
+    // SPI pin configuration
     uint8_t _pinCS = 0xFF;
     uint8_t _pinSCK = 0xFF;
     uint8_t _pinMISO = 0xFF;

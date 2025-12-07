@@ -1,24 +1,42 @@
 #include "BMP280.h"
 #include <math.h>
 
-BMP280::BMP280(uint8_t csPin) : _useHardwareSPI(true), _pinCS(csPin) {}
+// I2C constructors
+BMP280::BMP280() : _useI2C(true), _useHardwareSPI(false) {
+    // I2C with default pins
+}
+
+BMP280::BMP280(uint8_t sdaPin, uint8_t sclPin)
+    : _useI2C(true), _useHardwareSPI(false), _pinSDA(sdaPin), _pinSCL(sclPin) {
+}
+
+// SPI constructors
+BMP280::BMP280(uint8_t csPin) : _useI2C(false), _useHardwareSPI(true), _pinCS(csPin) {}
 
 BMP280::BMP280(uint8_t sckPin, uint8_t misoPin, uint8_t mosiPin, uint8_t csPin)
-    : _useHardwareSPI(false), _pinCS(csPin), _pinSCK(sckPin), _pinMISO(misoPin), _pinMOSI(mosiPin) {}
+    : _useI2C(false), _useHardwareSPI(false), _pinCS(csPin), _pinSCK(sckPin), _pinMISO(misoPin), _pinMOSI(mosiPin) {}
 
 /*!
  *  @brief  Initialize the BMP280 sensor
  *  
- *  Sets up SPI communication (hardware or software), verifies chip ID,
+ *  Sets up I2C or SPI communication (hardware or software), verifies chip ID,
  *  reads calibration data from sensor, and configures sensor for normal
  *  operation mode with default settings.
  *  
- *  @param  chipId  Expected chip ID (default: 0x58 for BMP280)
+ *  @param  i2cAddr  I2C address (default: 0x76 for BMP280, only used for I2C)
+ *  @param  chipId   Expected chip ID (default: 0x58 for BMP280)
  *  @return true if initialization successful and chip ID matches,
  *          false if chip ID mismatch or initialization failed
  */
-bool BMP280::begin(uint8_t chipId) {
-    if (_useHardwareSPI) {
+bool BMP280::begin(uint8_t i2cAddr, uint8_t chipId) {
+    if (_useI2C) {
+        _i2cAddress = i2cAddr;
+        if (_pinSDA != 0xFF && _pinSCL != 0xFF) {
+            Wire.begin(_pinSDA, _pinSCL);
+        } else {
+            Wire.begin();
+        }
+    } else if (_useHardwareSPI) {
         SPI.begin();
         pinMode(_pinCS, OUTPUT);
         deselect();
@@ -83,26 +101,38 @@ uint8_t BMP280::spiTransfer(uint8_t value) {
     return received;
 }
 
-// Read 8-bit register (SPI): address with read bit (MSB) = 1
+// Read 8-bit register
 uint8_t BMP280::read8(uint8_t reg) {
-    // For BMP280: read => reg | 0x80
-    uint8_t value = 0;
-    if (_useHardwareSPI) {
-        static const SPISettings settings(8000000, MSBFIRST, SPI_MODE0);
-        SPI.beginTransaction(settings);
+    if (_useI2C) {
+        Wire.beginTransmission(_i2cAddress);
+        Wire.write(reg);
+        Wire.endTransmission(false);
+        Wire.requestFrom(_i2cAddress, (uint8_t)1);
+        if (Wire.available()) {
+            return Wire.read();
+        }
+        return 0;
+    } else {
+        // SPI read: address with read bit (MSB) = 1
+        // For BMP280: read => reg | 0x80
+        uint8_t value = 0;
+        if (_useHardwareSPI) {
+            static const SPISettings settings(8000000, MSBFIRST, SPI_MODE0);
+            SPI.beginTransaction(settings);
+            select();
+            SPI.transfer(reg | 0x80);
+            value = SPI.transfer(0x00);
+            deselect();
+            SPI.endTransaction();
+            return value;
+        }
+
         select();
-        SPI.transfer(reg | 0x80);
-        value = SPI.transfer(0x00);
+        spiTransfer(reg | 0x80);
+        value = spiTransfer(0x00);
         deselect();
-        SPI.endTransaction();
         return value;
     }
-
-    select();
-    spiTransfer(reg | 0x80);
-    value = spiTransfer(0x00);
-    deselect();
-    return value;
 }
 
 // Read 24-bit value (3 bytes) - returns raw 24-bit value (MSB, LSB, XLSB)
@@ -113,46 +143,64 @@ uint32_t BMP280::read24(uint8_t reg) {
     return ((uint32_t)data[0] << 16) | ((uint32_t)data[1] << 8) | (uint32_t)data[2];
 }
 
-// Write 8-bit register (SPI): address with write bit (MSB) = 0
+// Write 8-bit register
 void BMP280::write8(uint8_t reg, uint8_t value) {
-    if (_useHardwareSPI) {
-        static const SPISettings settings(8000000, MSBFIRST, SPI_MODE0);
-        SPI.beginTransaction(settings);
-        select();
-        SPI.transfer(reg & 0x7F);
-        SPI.transfer(value);
-        deselect();
-        SPI.endTransaction();
-        return;
-    }
+    if (_useI2C) {
+        Wire.beginTransmission(_i2cAddress);
+        Wire.write(reg);
+        Wire.write(value);
+        Wire.endTransmission();
+    } else {
+        // SPI write: address with write bit (MSB) = 0
+        if (_useHardwareSPI) {
+            static const SPISettings settings(8000000, MSBFIRST, SPI_MODE0);
+            SPI.beginTransaction(settings);
+            select();
+            SPI.transfer(reg & 0x7F);
+            SPI.transfer(value);
+            deselect();
+            SPI.endTransaction();
+            return;
+        }
 
-    select();
-    spiTransfer(reg & 0x7F);
-    spiTransfer(value);
-    deselect();
+        select();
+        spiTransfer(reg & 0x7F);
+        spiTransfer(value);
+        deselect();
+    }
 }
 
 // Read multiple bytes starting from register address
 void BMP280::readBytes(uint8_t reg, uint8_t* data, uint8_t length) {
-    if (_useHardwareSPI) {
-        static const SPISettings settings(8000000, MSBFIRST, SPI_MODE0);
-        SPI.beginTransaction(settings);
+    if (_useI2C) {
+        Wire.beginTransmission(_i2cAddress);
+        Wire.write(reg);
+        Wire.endTransmission(false);
+        Wire.requestFrom(_i2cAddress, length);
+        for (uint8_t i = 0; i < length && Wire.available(); i++) {
+            data[i] = Wire.read();
+        }
+    } else {
+        if (_useHardwareSPI) {
+            static const SPISettings settings(8000000, MSBFIRST, SPI_MODE0);
+            SPI.beginTransaction(settings);
+            select();
+            SPI.transfer(reg | 0x80);
+            for (uint8_t i = 0; i < length; i++) {
+                data[i] = SPI.transfer(0x00);
+            }
+            deselect();
+            SPI.endTransaction();
+            return;
+        }
+
         select();
-        SPI.transfer(reg | 0x80);
+        spiTransfer(reg | 0x80);
         for (uint8_t i = 0; i < length; i++) {
-            data[i] = SPI.transfer(0x00);
+            data[i] = spiTransfer(0x00);
         }
         deselect();
-        SPI.endTransaction();
-        return;
     }
-
-    select();
-    spiTransfer(reg | 0x80);
-    for (uint8_t i = 0; i < length; i++) {
-        data[i] = spiTransfer(0x00);
-    }
-    deselect();
 }
 
 // Read calibration data from BMP280
@@ -367,4 +415,11 @@ float BMP280::waterBoilingPoint(float pressure) {
     // Convert Pascals to hPa
     float pressure_hPa = pressure / 100.0;
     return (234.175 * log(pressure_hPa / 6.1078)) / (17.08085 - log(pressure_hPa / 6.1078));
+}
+
+// Read all sensor data (temperature, pressure, altitude)
+void BMP280::readAll(float &temperature, float &pressure, float &altitude, float seaLevelPressure) {
+    temperature = readTemperature();
+    pressure = readPressure();
+    altitude = readAltitude(seaLevelPressure);
 }
