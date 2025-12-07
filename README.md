@@ -1,3 +1,3 @@
-# GY-91
+# EasyIMU
 
-Arduino/ESP32 library to easily read data from the GY-91 10-DOF IMU module (MPU9250 + BMP280) via SPI or I²C
+Arduino/ESP32 library to easily read data from IMU modules such as GY-91, MPU9250, MPU6050, BMP280 and others, via SPI or I²C
